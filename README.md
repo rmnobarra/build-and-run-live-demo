@@ -2,12 +2,12 @@
 
 ## Prerequisites
 
-Docker: https://docs.docker.com/engine/install/
-Kind: https://kind.sigs.k8s.io/
-kubectl: https://kubernetes.io/docs/tasks/tools/
-helm: https://helm.sh/docs/intro/install/
-Stern: https://github.com/stern/stern
-Kubectx & Kubens: https://github.com/ahmetb/kubectx
+- Docker: https://docs.docker.com/engine/install/
+- Kind: https://kind.sigs.k8s.io/
+- kubectl: https://kubernetes.io/docs/tasks/tools/
+- helm: https://helm.sh/docs/intro/install/
+- Stern: https://github.com/stern/stern
+- Kubectx & Kubens: https://github.com/ahmetb/kubectx
 
 ## Environment
 
