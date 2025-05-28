@@ -1,0 +1,82 @@
+image:
+  repository: grafana/grafana
+  tag: latest
+  pullPolicy: IfNotPresent
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# Fix for init container permissions issues
+initChownData:
+  ## If false, data ownership will not be reset at startup
+  ## This may cause issues with file permissions if the container runs as a different user
+  enabled: false
+
+securityContext:
+  runAsUser: 472
+  runAsGroup: 472
+  fsGroup: 472
+
+persistence:
+  type: pvc
+  enabled: true
+  # storageClassName: default
+  accessModes:
+    - ReadWriteOnce
+  size: 10Gi
+
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+    - name: Loki
+      type: loki
+      url: http://loki-gateway.observability.svc.cluster.local
+      access: proxy
+      isDefault: false
+      editable: true
+    - name: victoriametrics
+      type: prometheus
+      orgId: 1
+      url: http://vmsingle-victoria-metrics-single-server.observability.svc.cluster.local:8428
+      access: proxy
+      isDefault: true
+      updateIntervalSeconds: 10
+      editable: true
+
+dashboardProviders:
+ dashboardproviders.yaml:
+   apiVersion: 1
+   providers:
+   - name: 'default'
+     orgId: 1
+     folder: ''
+     type: file
+     disableDeletion: true
+     editable: true
+     options:
+       path: /var/lib/grafana/dashboards/default
+
+dashboards:
+  default:
+    prometheus:
+      gnetId: 1860
+      revision: 1
+      datasource: victoriametrics
+    kubernetes:
+      gnetId: 14205
+      revision: 1
+      datasource: victoriametrics
+    kubernetesPod:
+      gnetId: 15760
+      revision: 1
+      datasource: victoriametrics
+
+service:
+  type: ClusterIP
+  port: 80

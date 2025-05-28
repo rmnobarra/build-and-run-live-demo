@@ -1,0 +1,222 @@
+server:
+  datasource:
+    url: http://vmsingle-victoria-metrics-single-server.observability.svc.cluster.local:8428
+  
+  remoteWrite:
+    url: http://vmsingle-victoria-metrics-single-server.observability.svc.cluster.local:8428/api/v1/write
+  
+  remoteRead:
+    url: http://vmsingle-victoria-metrics-single-server.observability.svc.cluster.local:8428/api/v1/read
+  
+  evaluationInterval: 30s
+  
+  externalLabels:
+    cluster: production
+    environment: kubernetes
+
+  notifier:
+    alertmanager:
+      url: "http://alertmanager.observability.svc.cluster.local:9093"
+
+  config:
+    alerts:
+      groups:
+   
+        - name: "Business Application Alerts"
+          rules:
+
+          - alert: TroubleBoxUnavailable
+            expr: sum by(namespace) (up{app="trouble-box"} == 0)
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Trouble Box está indisponível"
+              description: "O endpoint /metrics ou /healthz não está respondendo no namespace {{ $labels.namespace }}."
+
+          - alert: TroubleBoxLowRPS
+            expr: sum by(namespace) (rate(troublebox_orders_total[1m])) < 3
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Baixa taxa de requisições"
+              description: "RPS menor que 3 por 2 minutos pode indicar falha no tráfego ou regressão no namespace {{ $labels.namespace }}."
+
+          - alert: TroubleBoxHighRPS
+            expr: sum by(namespace) (rate(troublebox_orders_total[1m])) > 200
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Alta taxa de requisições"
+              description: "RPS acima de 200 pode indicar carga excessiva ou anomalia no namespace {{ $labels.namespace }}."
+
+        - name: "Business SLO Alerts"
+          rules:
+          - alert: TroubleBoxAvailabilityBelowSLO
+            annotations:
+              description: "A disponibilidade da aplicação Trouble Box caiu abaixo de 99.9% nos últimos 2 minutos no namespace {{ $labels.namespace }}."
+              summary: Disponibilidade abaixo do SLO
+            expr: avg by(namespace) (avg_over_time(up{app="trouble-box"}[5m])) * 100 < 99.9
+            for: 2m
+            labels:
+              severity: critical
+
+          - alert: TroubleBoxLowRPSBelowSLO
+            annotations:
+              description: "A média de requisições por segundo estão abaixo de 4 nos últimos 2 minutos no namespace {{ $labels.namespace }}. "
+              summary: RPS abaixo do SLO
+            expr: avg by(namespace) (avg_over_time(rate(troublebox_orders_total[1m])[5m])) < 4
+            for: 2m
+            labels:
+              severity: critical
+
+        - name: "Kubernetes Infrastructure Alerts"
+          rules:
+          - alert: KubernetesNodeNotReady
+            expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Node not ready"
+              description: "O nó {{ $labels.node }} está indisponível por mais de 2 minutos."
+              
+          - alert: KubernetesNodeDiskPressure
+            expr: kube_node_status_condition{condition="DiskPressure",status="true"} == 1
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Node disk pressure"
+              description: "O nó {{ $labels.node }} está experimentando pressão de disco por mais de 5 minutos."
+              
+          - alert: KubernetesNodeMemoryPressure
+            expr: kube_node_status_condition{condition="MemoryPressure",status="true"} == 1
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Node memory pressure"
+              description: "O nó {{ $labels.node }} está experimentando pressão de memória por mais de 5 minutos."
+              
+          - alert: KubernetesDeploymentReplicasMismatch
+            expr: kube_deployment_spec_replicas != kube_deployment_status_replicas_available
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Deployment replicas mismatch"
+              description: "O Deployment {{ $labels.namespace }}/{{ $labels.deployment }} não atingiu o número esperado de réplicas por mais de 15 minutos."
+              
+          - alert: KubernetesDeploymentNotAvailable
+            expr: kube_deployment_status_replicas_available == 0
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Deployment not available"
+              description: "O Deployment {{ $labels.namespace }}/{{ $labels.deployment }} não possui réplicas disponíveis por mais de 5 minutos."
+              
+          - alert: KubernetesDaemonSetNotScheduled
+            expr: kube_daemonset_status_desired_number_scheduled - kube_daemonset_status_current_number_scheduled > 0
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "DaemonSet pods not scheduled"
+              description: "O DaemonSet {{ $labels.namespace }}/{{ $labels.daemonset }} não agendou todos os pods desejados por mais de 10 minutos."
+              
+          - alert: KubernetesDaemonSetNotReady
+            expr: kube_daemonset_status_number_ready / kube_daemonset_status_desired_number_scheduled * 100 < 80
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "DaemonSet not ready"
+              description: "Menos de 80% dos pods desejados no DaemonSet {{ $labels.namespace }}/{{ $labels.daemonset }} estão prontos por mais de 10 minutos."
+              
+          - alert: KubernetesStatefulSetReplicasMismatch
+            expr: kube_statefulset_status_replicas_ready != kube_statefulset_status_replicas
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "StatefulSet replicas mismatch"
+              description: "O StatefulSet {{ $labels.namespace }}/{{ $labels.statefulset }} não atingiu o número esperado de réplicas por mais de 15 minutos."
+              
+          - alert: KubernetesPodCrashLoopBackOff
+            expr: |
+              max by (namespace, pod) (
+                kube_pod_container_status_waiting{reason="CrashLoopBackOff"} * on(pod, namespace) 
+                group_right kube_pod_info
+              ) > 0
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Pod crash loop"
+              description: "O Pod {{ $labels.namespace }}/{{ $labels.pod }} está em ciclo de falhas por mais de 2 minutos."
+              
+          - alert: KubernetesPodRestartingTooMuch
+            expr: increase(kube_pod_container_status_restarts_total[1h]) > 5
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Pod restarting frequently"
+              description: "O Pod {{ $labels.namespace }}/{{ $labels.pod }} reiniciou mais de 5 vezes na última hora."
+              
+          - alert: KubernetesPodPending
+            expr: kube_pod_status_phase{phase="Pending"} == 1
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Pod pending too long"
+              description: "O Pod {{ $labels.namespace }}/{{ $labels.pod }} está no estado pendente por mais de 30 minutos."
+              
+          - alert: KubernetesPersistentVolumeClaimPending
+            expr: kube_persistentvolumeclaim_status_phase{phase="Pending"} == 1
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "PVC pending"
+              description: "O PersistentVolumeClaim {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} está em estado pendente por mais de 5 minutos."
+              
+          - alert: DiskUsageTooHigh
+            expr: troublebox_disk_usage_percent > 50
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Uso de disco acima de 50% no Trouble Box"
+              description: "O pod {{ $labels.kubernetes_pod_name }} no namespace {{ $labels.kubernetes_namespace }} está usando mais de 85% do volume montado."
+           
+          - alert: KubernetesPersistentVolumeFailed
+            expr: kube_persistentvolume_status_phase{phase=~"Failed|Pending"} == 1
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "PV failed"
+              description: "O PersistentVolume {{ $labels.persistentvolume }} está no estado {{ $labels.phase }} por mais de 5 minutos."
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
+service:
+  enabled: true
+  servicePort: 8880
+  targetPort: 8880
+  type: ClusterIP
+  
+serviceMonitor:
+  enabled: false

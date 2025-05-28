@@ -1,0 +1,79 @@
+daemonset:
+  enabled: true
+
+image:
+  registry: docker.io
+  repository: grafana/promtail
+  tag: 3.4.2
+  pullPolicy: IfNotPresent
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+podSecurityContext:
+  runAsUser: 0
+  runAsGroup: 0
+
+containerSecurityContext:
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+  allowPrivilegeEscalation: false
+
+tolerations:
+  - key: node-role.kubernetes.io/master
+    operator: Exists
+    effect: NoSchedule
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule
+
+defaultVolumes:
+  - name: run
+    hostPath:
+      path: /run/promtail
+  - name: containers
+    hostPath:
+      path: /var/lib/docker/containers
+  - name: pods
+    hostPath:
+      path: /var/log/pods
+
+defaultVolumeMounts:
+  - name: run
+    mountPath: /run/promtail
+  - name: containers
+    mountPath: /var/lib/docker/containers
+    readOnly: true
+  - name: pods
+    mountPath: /var/log/pods
+    readOnly: true
+
+initContainer:
+  - name: set-sysctl
+    image: busybox:1.33
+    imagePullPolicy: IfNotPresent
+    command:
+      - sh
+      - -c
+      - |
+        sysctl -w fs.inotify.max_user_watches=1048576
+        sysctl -w fs.inotify.max_user_instances=8192
+    securityContext:
+      privileged: true
+
+config:
+  clients:
+    - url: http://loki-gateway/loki/api/v1/push
+  logLevel: info
+  logFormat: logfmt
+  serverPort: 3101
+  positions:
+    filename: /run/promtail/positions.yaml
+  enabled: true
