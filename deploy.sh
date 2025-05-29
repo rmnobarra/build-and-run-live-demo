@@ -51,19 +51,19 @@ echo -e "${BLUE}Deploying kube-state-metrics...${NC}"
 helm upgrade --install kube-state-metrics prometheus-community/kube-state-metrics -n $OBSERVABILITY_NAMESPACE
 
 echo -e "${BLUE}Deploying VictoriaMetrics...${NC}"
-helm upgrade --install vmsingle vm/victoria-metrics-single \
+helm upgrade --install vmsingle victoria-metrics/victoria-metrics-single \
   --namespace $OBSERVABILITY_NAMESPACE \
   --values kubernetes/helm-values/vmsingle-values.yaml
 
 # Deploy vmagent
 echo -e "${BLUE}Deploying vmagent...${NC}"
-helm upgrade --install vmagent vm/victoria-metrics-agent \
+helm upgrade --install vmagent victoria-metrics/victoria-metrics-agent \
   --namespace $OBSERVABILITY_NAMESPACE \
   --values kubernetes/helm-values/vmagent-values.yaml
 
 # Deploy vmalert
 echo -e "${BLUE}Deploying vmalert...${NC}"
-helm upgrade --install vmalert vm/victoria-metrics-alert \
+helm upgrade --install vmalert victoria-metrics/victoria-metrics-alert \
   --namespace $OBSERVABILITY_NAMESPACE \
   --values kubernetes/helm-values/vmalert-values.yaml \
   --timeout 5m
